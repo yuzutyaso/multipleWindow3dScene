@@ -1,4 +1,4 @@
-import WindowManager from './WindowManager.js'
+import WindowManager from './WindowManager.js';
 
 const t = THREE;
 let camera, scene, renderer, world;
@@ -19,73 +19,67 @@ let internalTime = getTime();
 let windowManager;
 let initialized = false;
 
-// タッチイベント関連の変数
+// --- スマートフォン対応のための追加・変更箇所 ---
 let isDragging = false;
 let lastPointerX, lastPointerY;
-let touchStartX, touchStartY; // Initial touch position for single touch
-let initialSceneOffsetX, initialSceneOffsetY; // Initial scene offset when touch starts
+let initialSceneOffsetX, initialSceneOffsetY; // タッチ開始時のシーンオフセット
 
-// get time in seconds since beginning of the day (so that all windows use the same time)
-function getTime ()
-{
+// 時間取得関数はそのまま
+function getTime () {
 	return (new Date().getTime() - today) / 1000.0;
 }
 
-
-if (new URLSearchParams(window.location.search).get("clear"))
-{
+if (new URLSearchParams(window.location.search).get("clear")) {
 	localStorage.clear();
-}
-else
-{	
-	document.addEventListener("visibilitychange", () => 
-	{
-		if (document.visibilityState != 'hidden' && !initialized)
-		{
+} else {	
+	document.addEventListener("visibilitychange", () => {
+		if (document.visibilityState != 'hidden' && !initialized) {
 			init();
 		}
 	});
 
 	window.onload = () => {
-		if (document.visibilityState != 'hidden')
-		{
+		if (document.visibilityState != 'hidden') {
 			init();
 		}
 	};
 
-	function init ()
-	{
+	function init () {
 		initialized = true;
 
 		setTimeout(() => {
 			setupScene();
 			setupWindowManager();
 			resize();
-			// スマートフォンではwindow.screenX/Yに依存しないため、updateWindowShapeの初期呼び出しは不要か、別のロジックが必要
-            // または、タッチイベントなどでsceneOffsetTargetを更新するようにする
-			// updateWindowShape(false); // この行は削除または変更
-			render();
-			window.addEventListener('resize', resize);
+			// スマートフォンでは window.screenX/Y に依存しないため、
+			// updateWindowShape の初期呼び出しは不要か、別のロジックが必要です
+			// updateWindowShape(false); // この行は削除または変更が必要です
 
-            // タッチイベントリスナーを追加
+			// --- タッチイベントリスナーの追加 ---
+            // renderer.domElement にイベントリスナーを追加することで、キャンバス上での操作を検出
             renderer.domElement.addEventListener('touchstart', onPointerStart, { passive: false });
             renderer.domElement.addEventListener('touchmove', onPointerMove, { passive: false });
             renderer.domElement.addEventListener('touchend', onPointerEnd);
-            renderer.domElement.addEventListener('mousedown', onPointerStart, { passive: false }); // デスクトップ互換性のため
+            // マウスイベントも残しておくとデスクトップでのデバッグに便利
+            renderer.domElement.addEventListener('mousedown', onPointerStart, { passive: false });
             renderer.domElement.addEventListener('mousemove', onPointerMove, { passive: false });
             renderer.domElement.addEventListener('mouseup', onPointerEnd);
-		}, 500)	
+
+			render();
+			window.addEventListener('resize', resize);
+		}, 500);	
 	}
 
-    // ポインタイベントのハンドラ (タッチとマウスの両方に対応)
+    // --- ポインターイベントのハンドラ (タッチとマウスの両方に対応) ---
     function onPointerStart(event) {
-        // 多点タッチを考慮するなら 'touches' プロパティを使用
+        // タッチイベントの場合は最初の指、マウスイベントの場合はそのままの座標を使用
         const clientX = event.type.startsWith('touch') ? event.touches[0].clientX : event.clientX;
         const clientY = event.type.startsWith('touch') ? event.touches[0].clientY : event.clientY;
 
         isDragging = true;
         lastPointerX = clientX;
         lastPointerY = clientY;
+        // ドラッグ開始時のシーンオフセットを記録
         initialSceneOffsetX = sceneOffset.x;
         initialSceneOffsetY = sceneOffset.y;
     }
@@ -93,7 +87,7 @@ else
     function onPointerMove(event) {
         if (!isDragging) return;
 
-        // イベントのデフォルト動作をキャンセルしてスクロールを防ぐ
+        // スクロールなどのデフォルト動作を防ぐ
         event.preventDefault();
 
         const clientX = event.type.startsWith('touch') ? event.touches[0].clientX : event.clientX;
@@ -102,22 +96,21 @@ else
         const deltaX = clientX - lastPointerX;
         const deltaY = clientY - lastPointerY;
 
-        // シーンオフセットのターゲットを、ドラッグ量に基づいて更新
-        // ここでは直接オフセットを更新するシンプルな方法
+        // 指の移動量に基づいてシーンオフセットのターゲットを更新
+        // ここではドラッグに合わせてシーンが直接移動するようにしています
         sceneOffsetTarget.x = initialSceneOffsetX + deltaX;
         sceneOffsetTarget.y = initialSceneOffsetY + deltaY;
 
-        // もしドラッグに応じて動的にオブジェクトを配置するなら、ここで wins[i].shape.x,y を更新するなど
-        // あるいは、world.position を直接操作する
+        // lastPointerX = clientX; // 継続的なドラッグのために最終座標を更新
+        // lastPointerY = clientY;
     }
 
     function onPointerEnd() {
         isDragging = false;
     }
+    // ----------------------------------------------------
 
-
-	function setupScene ()
-	{
+	function setupScene () {
 		camera = new t.OrthographicCamera(0, 0, window.innerWidth, window.innerHeight, -10000, 10000);
 		
 		camera.position.z = 2.5;
@@ -138,12 +131,11 @@ else
 		document.body.appendChild( renderer.domElement );
 	}
 
-	function setupWindowManager ()
-	{
+	function setupWindowManager () {
 		windowManager = new WindowManager();
-		// スマートフォンではこのコールバックの動作を調整する必要がある
-		// updateWindowShapeはwindow.screenX/Yに依存しているため、そのロジックを見直す
-		windowManager.setWinShapeChangeCallback(updateWindowShape); 
+		// スマートフォンでは updateWindowShape の役割が変わるため、このコールバックは残しつつ、
+		// 内部ロジックをモバイル向けに調整する必要がある
+		windowManager.setWinShapeChangeCallback(updateWindowShape);
 		windowManager.setWinChangeCallback(windowsUpdated);
 
 		let metaData = {foo: "bar"};
@@ -153,24 +145,22 @@ else
 		windowsUpdated();
 	}
 
-	function windowsUpdated ()
-	{
+	function windowsUpdated () {
 		updateNumberOfCubes();
 	}
 
-	function updateNumberOfCubes ()
-	{
+	function updateNumberOfCubes () {
 		let wins = windowManager.getWindows();
 
 		cubes.forEach((c) => {
 			world.remove(c);
-		})
+		});
 
 		cubes = [];
 
-		for (let i = 0; i < wins.length; i++)
-		{
-			let win = wins[i];
+		for (let i = 0; i < wins.length; i++) {
+			let win = wins[i]; // ここでの 'win' は、もはやブラウザウィンドウではなく、WindowManagerが管理する「データオブジェクト」
+                               // と解釈する必要があります。
 
 			let c = new t.Color();
 			c.setHSL(i * .1, 1.0, .5);
@@ -178,32 +168,35 @@ else
 			let s = 100 + i * 50;
 			let cube = new t.Mesh(new t.BoxGeometry(s, s, s), new t.MeshBasicMaterial({color: c , wireframe: true}));
 			
-            // キューブの初期位置は、ウィンドウの相対位置ではなく、
-            // 画面の中央からのオフセットや、タッチでの移動を考慮した位置に設定する
-            // ここでは簡易的に、各キューブが横に並ぶように配置
-            cube.position.x = (i * s * 1.5) - (wins.length * s * 1.5 * 0.5); // 画面中央に配置
-            cube.position.y = 0; // 画面中央に配置
+            // --- キューブの初期配置を画面中央を基準に調整 ---
+            // win.shape.x, win.shape.y はデスクトップのウィンドウ位置なので、
+            // スマートフォンでは画面内の相対位置として再定義
+            cube.position.x = (i * s * 1.5) - (wins.length * s * 1.5 * 0.5); // 横に並べる例
+            cube.position.y = 0; // 画面中央のY座標
 
 			world.add(cube);
 			cubes.push(cube);
 		}
 	}
 
-    // スマートフォンではこの関数はwindow.screenX/Yに依存しないように変更が必要
-    // タッチイベントやジェスチャーでsceneOffsetTargetが直接更新されることを想定
-	function updateWindowShape (easing = true)
-	{
-		// sceneOffsetTarget = {x: -window.screenX, y: -window.screenY}; // この行はモバイルでは機能しないため削除または変更
-		// モバイルでは、ユーザーのドラッグ操作によってsceneOffsetTargetが更新される
-        // または、特定の固定位置にシーンを配置する
-        // 例： sceneOffsetTarget = {x: 0, y: 0};
-        // あるいは、現在のシーンの中心に固定
-        if (!easing) sceneOffset = sceneOffsetTarget;
+	// --- updateWindowShape関数の修正 ---
+    // スマートフォンでは window.screenX/Y は機能しないため、この関数は別の目的で使用するか、
+    // ここでsceneOffsetTargetを直接更新するロジックは削除します。
+    // 代わりに、タッチイベントが sceneOffsetTarget を更新します。
+	function updateWindowShape (easing = true) {
+		// sceneOffsetTarget = {x: -window.screenX, y: -window.screenY}; // この行は削除または変更
+		// もし easing が false の場合にシーンオフセットを瞬時に更新したい場合は、別のロジックを追加
+        if (!easing) {
+            // 例: シーンを中央に戻す
+            // sceneOffset.x = 0;
+            // sceneOffset.y = 0;
+            // sceneOffsetTarget.x = 0;
+            // sceneOffsetTarget.y = 0;
+        }
 	}
 
 
-	function render ()
-	{
+	function render () {
 		let t = getTime();
 
 		// windowManager.update(); // これはデスクトップの複数ウィンドウ同期ロジック
@@ -216,36 +209,28 @@ else
 		world.position.x = sceneOffset.x;
 		world.position.y = sceneOffset.y;
 
-		let wins = windowManager.getWindows(); // ここで取得される wins の内容は、モバイルでは「複数のウィンドウ」ではなく、
-                                              // WindowManagerが管理する「複数の要素」として解釈されるべき
+		let wins = windowManager.getWindows(); // ここで得られる 'wins' はキューブのデータとして利用
 
-		for (let i = 0; i < cubes.length; i++)
-		{
+		for (let i = 0; i < cubes.length; i++) {
 			let cube = cubes[i];
-			let win = wins[i];
-			let _t = t;// + i * .2;
+			let win = wins[i]; // 各キューブに対応するデータ
 
-            // キューブの移動ロジックは、ウィンドウの位置に依存しないように変更
-            // 例：固定された位置から回転、またはタッチ操作に応じて移動
-            // posTargetは、ここではキューブの初期相対位置として機能する
-			// let posTarget = {x: win.shape.x + (win.shape.w * .5), y: win.shape.y + (win.shape.h * .5)} // この行は変更
-
-            // スマートフォンでは、各キューブは単一のキャンバス内で相対的に動く
-            // ここではワールド空間でキューブが回転するようにする
-            cube.rotation.x = _t * .5;
-			cube.rotation.y = _t * .3;
-            // cube.position.x, cube.position.y は updateNumberOfCubes で設定された相対位置を維持
-		};
+			// --- キューブの移動ロジックも調整 ---
+			// win.shape.x や win.shape.y に依存するのではなく、
+			// キューブ自体の回転や、タッチ操作によるシーン全体の移動で表現します。
+			// posTarget はもはやウィンドウ位置ではないため、削除または別の用途に。
+			
+			cube.rotation.x = t * .5;
+			cube.rotation.y = t * .3;
+		}
 
 		renderer.render(scene, camera);
 		requestAnimationFrame(render);
 	}
 
-
-	function resize ()
-	{
+	function resize () {
 		let width = window.innerWidth;
-		let height = window.innerHeight
+		let height = window.innerHeight;
 		
 		camera = new t.OrthographicCamera(0, width, 0, height, -10000, 10000);
 		camera.updateProjectionMatrix();
