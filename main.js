@@ -236,4 +236,4 @@ if (new URLSearchParams(window.location.search).get("clear")) {
 		camera.updateProjectionMatrix();
 		renderer.setSize( width, height );
 	}
-}
+	}
